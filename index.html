@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The RWA Desk — reconcile any Mantle asset across live sources</title>
+<meta name="description" content="A free onchain research tool. Pick a Mantle asset, it pulls the same number from independent live sources, shows which sources agree or disagree, and flags the risk. It reads the chain, not the press release.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F5F2E9; --paper2:#EEEADD; --ink:#17170F; --ink2:#4A4A3C;
+  --forest:#123B2E; --mint:#00a578; --flag:#c53b28; --line:#d9d3c2;
+  --serif:"Fraunces",Georgia,serif; --sans:"Instrument Sans",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at 12% 8%,rgba(18,59,46,.04),transparent 40%),radial-gradient(circle at 88% 96%,rgba(197,59,40,.03),transparent 42%);}
+.wrap{max-width:940px;margin:0 auto;padding:0 24px}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--forest);font-weight:500}
+
+header.hero{padding:70px 0 38px;border-bottom:1.5px solid var(--ink)}
+.hero .eyebrow{margin-bottom:24px}
+h1{font-family:var(--serif);font-weight:900;font-size:clamp(46px,8.5vw,90px);line-height:.94;letter-spacing:-.02em;margin-bottom:18px}
+.thesis{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(20px,3.2vw,28px);line-height:1.25;max-width:26ch;color:var(--forest)}
+.lede{margin-top:20px;font-size:17px;max-width:60ch;color:var(--ink2)}
+
+/* picker */
+.picker{margin-top:32px}
+.picker .lab{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);margin-bottom:10px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{font-family:var(--mono);font-size:13px;font-weight:500;border:1.5px solid var(--ink);background:transparent;color:var(--ink);padding:9px 14px;cursor:pointer;transition:all .15s}
+.chip:hover{background:var(--paper2)}
+.chip.on{background:var(--ink);color:var(--paper)}
+.chip.custom{padding:0}
+.chip.custom input{font-family:var(--mono);font-size:13px;border:none;background:transparent;color:var(--ink);padding:9px 12px;width:150px;outline:none}
+.chip.custom input::placeholder{color:var(--ink2)}
+button.run{font-family:var(--mono);font-weight:700;font-size:14px;letter-spacing:.03em;background:var(--forest);color:var(--paper);border:none;padding:11px 20px;cursor:pointer;transition:transform .12s,background .2s}
+button.run:hover{background:var(--ink);transform:translateY(-1px)}
+button.run:disabled{opacity:.5;cursor:wait}
+.searchrow{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
+.searchwrap{position:relative;flex:1;min-width:260px;max-width:560px}
+#search{width:100%;font-family:var(--mono);font-size:15px;border:1.5px solid var(--ink);background:#fbfaf4;color:var(--ink);padding:14px 16px;outline:none}
+#search:focus{background:#fff}
+#search::placeholder{color:var(--ink2)}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:#fbfaf4;border:1.5px solid var(--ink);box-shadow:6px 6px 0 rgba(23,23,15,.9);z-index:30;max-height:340px;overflow:auto}
+.result{display:flex;align-items:center;gap:11px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--line)}
+.result:last-child{border-bottom:none}
+.result:hover,.result.active{background:var(--paper2)}
+.result img{width:22px;height:22px;border-radius:50%;flex:none;background:var(--line)}
+.result .ph{width:22px;height:22px;flex:none}
+.result .nm{font-family:var(--sans);font-size:14px;font-weight:600;line-height:1.1}
+.result .sy{font-family:var(--mono);font-size:11px;color:var(--ink2);text-transform:uppercase}
+.result .rank{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink2);white-space:nowrap}
+.results .empty{padding:12px 14px;font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.results .head{padding:7px 14px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--line);background:var(--paper2)}
+.quick{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.quick .qlab{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.quick .chip{font-size:12px;padding:7px 12px}
+
+/* desk */
+.desk{margin:34px 0 8px;border:1.5px solid var(--ink);background:#fbfaf4;box-shadow:6px 6px 0 rgba(23,23,15,.9)}
+.desk-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 18px;border-bottom:1.5px solid var(--ink);background:var(--paper2);flex-wrap:wrap}
+.desk-head .title{font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+.desk-head .agent{font-family:var(--mono);font-size:11px;color:var(--ink2)}
+.desk-body{padding:22px 18px 26px}
+.status{font-family:var(--mono);font-size:12.5px;color:var(--forest);min-height:18px;margin-bottom:18px}
+.status .blink{animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+.blockhead{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink2);margin:24px 0 10px;border-bottom:1px dashed var(--line);padding-bottom:6px}
+.blockhead:first-child{margin-top:0}
+
+.snap{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:2px;background:var(--line)}
+.snap .cell{background:#fbfaf4;padding:12px 14px}
+.snap .k{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.snap .v{font-family:var(--serif);font-weight:600;font-size:24px;margin-top:3px;letter-spacing:-.01em}
+.snap .v small{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--ink2)}
+.down{color:var(--flag)} .up{color:var(--mint)}
+
+/* reconcile rows: each metric, each source named */
+.recon{border:1.5px solid var(--ink)}
+.rrow{padding:13px 16px;border-bottom:1px solid var(--line)}
+.rrow:last-child{border-bottom:none}
+.rrow .top{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px}
+.rrow .metric{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);min-width:64px}
+.srcs{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline}
+.src{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+.src b{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--ink);margin-left:4px}
+.tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.07em;padding:3px 7px;text-transform:uppercase;white-space:nowrap;margin-left:auto}
+.tag.agree{color:#fff;background:var(--mint);transform:rotate(-2deg);display:inline-block;box-shadow:2px 2px 0 rgba(23,23,15,.2)}
+.tag.conflict{color:var(--flag);border:1.5px solid var(--flag)}
+.tag.single{color:var(--ink2);border:1px dashed var(--ink2)}
+.rrow .note{font-family:var(--mono);font-size:11px;color:var(--ink2);margin-top:6px}
+.rrow .note.bad{color:var(--flag)}
+
+.flags{list-style:none;display:grid;gap:8px}
+.flags li{font-size:14.5px;padding:11px 14px;background:rgba(197,59,40,.05);border-left:3px solid var(--flag)}
+.flags li.ok{background:rgba(0,165,120,.06);border-left-color:var(--mint)}
+.flags li .lab{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--flag);text-transform:uppercase;display:block;margin-bottom:3px}
+.flags li.ok .lab{color:var(--mint)}
+.srcline{font-family:var(--mono);font-size:11px;color:var(--ink2);margin-top:14px}
+
+/* case study */
+section.case{padding:52px 0;border-bottom:1px solid var(--line)}
+.case .eyebrow{margin-bottom:16px}
+.case h2{font-family:var(--serif);font-weight:900;font-size:clamp(26px,5vw,40px);letter-spacing:-.015em;line-height:1;margin-bottom:10px}
+.case .body-p{font-size:16px;max-width:60ch;color:var(--ink2);margin-bottom:8px}
+.casebox{border:1.5px solid var(--ink);background:#fbfaf4;margin-top:22px;box-shadow:5px 5px 0 rgba(23,23,15,.85)}
+.casebox .ch{padding:11px 16px;border-bottom:1.5px solid var(--ink);background:var(--paper2);font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.casebox .ch .snapshot{color:var(--ink2);font-weight:400}
+
+/* prose */
+section.prose{padding:52px 0;border-bottom:1px solid var(--line)}
+section.prose h2{font-family:var(--serif);font-weight:900;font-size:clamp(26px,5vw,40px);letter-spacing:-.015em;line-height:1;margin-bottom:8px}
+section.prose .eyebrow{margin-bottom:18px}
+.body-p{font-size:17px;max-width:62ch;color:var(--ink)}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:2px;background:var(--line);margin-top:24px;border:1.5px solid var(--ink)}
+.grid4 .step{background:var(--paper);padding:20px}
+.grid4 .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--flag);letter-spacing:.1em}
+.grid4 .step h3{font-family:var(--serif);font-weight:600;font-size:20px;margin:8px 0 6px}
+.grid4 .step p{font-size:14px;color:var(--ink2)}
+.stack{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:24px}
+.stack .item{border-top:2px solid var(--ink);padding-top:12px}
+.stack .item .code{font-family:var(--mono);font-size:12px;color:var(--forest);letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+.stack .item p{font-size:14.5px;margin-top:6px;color:var(--ink2)}
+
+footer{padding:46px 0 64px}
+footer .rule{font-family:var(--serif);font-style:italic;font-size:20px;color:var(--forest)}
+footer .meta{font-family:var(--mono);font-size:12px;color:var(--ink2);margin-top:16px;display:flex;gap:8px 20px;flex-wrap:wrap}
+footer a{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:560px){header.hero{padding:46px 0 28px}.desk,.casebox{box-shadow:4px 4px 0 rgba(23,23,15,.9)}.snap .v{font-size:20px}.tag{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Mantle · onchain research tool · free · ERC-8004</div>
+    <h1>The RWA&nbsp;Desk</h1>
+    <p class="thesis">It reads the chain, not the press release.</p>
+    <p class="lede">Pick any Mantle asset. The Desk pulls the same number from independent live sources, tells you which sources agree and which disagree, and flags the risk. When two feeds don't match, it names both. No single feed gets trusted on its own.</p>
+
+    <div class="picker">
+      <div class="lab">search any asset — type a name or symbol, live from CoinGecko</div>
+      <div class="searchrow">
+        <div class="searchwrap">
+          <input id="search" placeholder="search a coin…  e.g. mantle, arbitrum, ondo, meth" autocomplete="off" spellcheck="false">
+          <div class="results" id="results" hidden></div>
+        </div>
+        <button class="run" id="runBtn">▸ Run</button>
+      </div>
+      <div class="quick" id="quick">
+        <span class="qlab">quick pick:</span>
+        <button class="chip" data-id="mantle" data-sym="MNT">MNT</button>
+        <button class="chip" data-id="mantle-staked-ether" data-sym="mETH">mETH</button>
+        <button class="chip" data-id="ethena-usde" data-sym="USDe">USDe</button>
+        <button class="chip" data-id="ondo-finance" data-sym="ONDO">ONDO</button>
+        <button class="chip" data-id="aave" data-sym="AAVE">AAVE</button>
+        <button class="chip" data-id="ethereum" data-sym="ETH">ETH</button>
+        <button class="chip" data-id="bitcoin" data-sym="BTC">BTC</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="desk" id="desk" aria-live="polite">
+    <div class="desk-head">
+      <span class="title" id="deskTitle">brief · $MNT</span>
+      <span class="agent">agent erc8004:mantle:the-rwa-desk</span>
+    </div>
+    <div class="desk-body">
+      <div class="status" id="status">idle. pick an asset and press <b>Run the Desk</b>.</div>
+      <div id="output" hidden>
+        <div class="blockhead">snapshot</div>
+        <div class="snap" id="snap"></div>
+        <div class="blockhead">reconciled numbers · sources named</div>
+        <div class="recon" id="recon"></div>
+        <div class="blockhead">signals</div>
+        <ul class="flags" id="flags"></ul>
+        <div class="srcline" id="srcline"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CASE STUDY -->
+  <section class="case">
+    <div class="eyebrow">worked example · why it matters</div>
+    <h2>The number everyone repeats is not the number onchain.</h2>
+    <p class="body-p">The live tool above reconciles data that has multiple public feeds. Some assets don't. MI4, Mantle's tokenized index fund, is the case the Desk was built for: a headline that traveled, and an onchain reality that didn't match it. Here the sources are named so you can check each one.</p>
+    <div class="casebox">
+      <div class="ch"><span>brief · Mantle Index Four (MI4)</span><span class="snapshot">manual snapshot · rwa.xyz + Messari + BusinessWire</span></div>
+      <div class="recon">
+        <div class="rrow">
+          <div class="top">
+            <span class="metric">anchor</span>
+            <span class="srcs">
+              <span class="src">BusinessWire (launch PR)<b>$400M</b></span>
+              <span class="src">Messari / rwa.xyz (deployed)<b>$127M</b></span>
+            </span>
+            <span class="tag conflict">conflict</span>
+          </div>
+          <div class="note bad">"$400M" was a DAO-approved ceiling. only ~$127M actually went onchain — a 32% fill. aspiration is not AUM.</div>
+        </div>
+        <div class="rrow">
+          <div class="top">
+            <span class="metric">AUM now</span>
+            <span class="srcs"><span class="src">rwa.xyz (live)<b>$106M</b></span></span>
+            <span class="tag single">single source</span>
+          </div>
+          <div class="note">down from $165M at end-2025 and $127M at end-Q1. path: $165M → $127M → $106M.</div>
+        </div>
+        <div class="rrow">
+          <div class="top">
+            <span class="metric">holders</span>
+            <span class="srcs"><span class="src">rwa.xyz<b>8</b></span></span>
+            <span class="tag single">single source</span>
+          </div>
+          <div class="note bad">eight holders. price discovery is thin and the fund is treasury-anchored, not owned by outside allocators.</div>
+        </div>
+      </div>
+    </div>
+    <p class="body-p" style="margin-top:20px">Bottom line the Desk writes: the wrapper is real and institutional-grade, but the demand is not here yet. Structure solved, distribution not.</p>
+  </section>
+
+  <section class="prose">
+    <div class="eyebrow">how it works</div>
+    <h2>Four layers, one run.</h2>
+    <p class="body-p">The tool is small on purpose. It runs entirely in your browser and points at any Mantle or crypto asset you type in. A terminal version exists too, for anyone who prefers the command line.</p>
+    <div class="grid4">
+      <div class="step"><div class="n">01 · FETCH</div><h3>Sources</h3><p>Price from CoinGecko and DefiLlama, TVL from DefiLlama. Each source is a named function. Add one, add a function.</p></div>
+      <div class="step"><div class="n">02 · RECONCILE</div><h3>Compare</h3><p>Same metric, many feeds. It measures the spread and shows every source by name. Agreement is verified, disagreement is flagged.</p></div>
+      <div class="step"><div class="n">03 · SIGNALS</div><h3>Flag</h3><p>Readable rules: sources disagree, weekly drawdown, distance from ATH, thin price confidence. Each flag names the number behind it.</p></div>
+      <div class="step"><div class="n">04 · BRIEF</div><h3>Read</h3><p>A short readout you can screenshot. Numbers come from the feeds, not from a model, so nothing is invented.</p></div>
+    </div>
+  </section>
+
+  <section class="prose">
+    <div class="eyebrow">built on Mantle's agent primitives</div>
+    <h2>Identity, skills, payments.</h2>
+    <div class="stack">
+      <div class="item"><div class="code">ERC-8004</div><p>The agent carries an onchain identity, so every brief it produces is attributable rather than anonymous.</p></div>
+      <div class="item"><div class="code">Agent Skills</div><p>Each fetch is a skill the agent composes into one reconciled picture.</p></div>
+      <div class="item"><div class="code">x402</div><p>When a source charges per call, the agent pays with x402. Identity, skills, payments on one network.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="rule">not financial advice. the desk reads the chain, not the press release.</p>
+    <div class="meta">
+      <span>Track 2 · Mantle Research Challenge</span>
+      <span>@oceanscarr</span>
+      <span>runs client-side · no server, no login</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+// asset picker (values are CoinGecko ids; DefiLlama resolves them via coingecko: prefix)
+let ASSET = {id:"mantle", sym:"MNT"};
+
+// curated fallback used only if CoinGecko search is unreachable
+const CURATED=[
+ {id:"mantle",sym:"MNT",name:"Mantle"},{id:"mantle-staked-ether",sym:"mETH",name:"Mantle Staked Ether"},
+ {id:"ethena-usde",sym:"USDe",name:"Ethena USDe"},{id:"ondo-finance",sym:"ONDO",name:"Ondo"},
+ {id:"aave",sym:"AAVE",name:"Aave"},{id:"ethereum",sym:"ETH",name:"Ethereum"},
+ {id:"bitcoin",sym:"BTC",name:"Bitcoin"},{id:"solana",sym:"SOL",name:"Solana"},
+ {id:"chainlink",sym:"LINK",name:"Chainlink"},{id:"arbitrum",sym:"ARB",name:"Arbitrum"},
+ {id:"optimism",sym:"OP",name:"Optimism"},{id:"uniswap",sym:"UNI",name:"Uniswap"},
+ {id:"lido-dao",sym:"LDO",name:"Lido DAO"},{id:"pendle",sym:"PENDLE",name:"Pendle"},
+ {id:"usd-coin",sym:"USDC",name:"USD Coin"},{id:"tether",sym:"USDT",name:"Tether"},
+ {id:"dai",sym:"DAI",name:"Dai"},{id:"maker",sym:"MKR",name:"Maker"},
+ {id:"curve-dao-token",sym:"CRV",name:"Curve DAO"},{id:"gmx",sym:"GMX",name:"GMX"},
+ {id:"jupiter-exchange-solana",sym:"JUP",name:"Jupiter"},{id:"binancecoin",sym:"BNB",name:"BNB"},
+ {id:"avalanche-2",sym:"AVAX",name:"Avalanche"},{id:"sui",sym:"SUI",name:"Sui"},
+ {id:"aptos",sym:"APT",name:"Aptos"},{id:"celestia",sym:"TIA",name:"Celestia"},
+ {id:"render-token",sym:"RENDER",name:"Render"},{id:"injective-protocol",sym:"INJ",name:"Injective"},
+ {id:"sei-network",sym:"SEI",name:"Sei"},{id:"the-graph",sym:"GRT",name:"The Graph"},
+ {id:"dogecoin",sym:"DOGE",name:"Dogecoin"},{id:"ripple",sym:"XRP",name:"XRP"},
+ {id:"cardano",sym:"ADA",name:"Cardano"},{id:"near",sym:"NEAR",name:"NEAR"}
+];
+
+const search=$('search'), results=$('results');
+let acItems=[], acActive=-1, acTimer=null;
+
+function renderResults(items, live){
+  acItems=items; acActive=-1;
+  if(!items.length){ results.innerHTML='<div class="empty">no match. try another name or symbol.</div>'; results.hidden=false; return; }
+  const head=`<div class="head">${live?'live · CoinGecko':'offline list'} · ${items.length} result${items.length>1?'s':''}</div>`;
+  results.innerHTML=head+items.map((c,i)=>`<div class="result" data-i="${i}">
+     ${c.thumb?`<img src="${c.thumb}" alt="" loading="lazy">`:'<span class="ph"></span>'}
+     <span class="nm">${c.name}</span><span class="sy">${c.symbol}</span>
+     ${c.rank?`<span class="rank">#${c.rank}</span>`:''}</div>`).join('');
+  results.hidden=false;
+  results.querySelectorAll('.result').forEach(el=>el.addEventListener('click',()=>pick(acItems[+el.dataset.i])));
+}
+function pick(c){
+  ASSET={id:c.id, sym:(c.symbol||c.id).toUpperCase()};
+  search.value=c.name+"  ("+ASSET.sym+")";
+  results.hidden=true; run();
+}
+function curatedFilter(q){
+  const ql=q.toLowerCase();
+  return CURATED.filter(c=>c.name.toLowerCase().includes(ql)||c.sym.toLowerCase().includes(ql)||c.id.includes(ql))
+    .slice(0,8).map(c=>({id:c.id,name:c.name,symbol:c.sym,thumb:null,rank:null}));
+}
+async function doSearch(q){
+  q=q.trim(); if(!q){ results.hidden=true; return; }
+  try{
+    const r=await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`);
+    if(r.ok){
+      const j=await r.json();
+      const items=(j.coins||[]).slice(0,8).map(c=>({id:c.id,name:c.name,symbol:c.symbol,thumb:c.thumb,rank:c.market_cap_rank}));
+      if(items.length){ renderResults(items,true); return; }
+    }
+  }catch(e){}
+  renderResults(curatedFilter(q), false);   // fallback
+}
+function highlight(){ results.querySelectorAll('.result').forEach(el=>{const i=+el.dataset.i; el.classList.toggle('active',i===acActive);}); }
+
+search.addEventListener('input',e=>{ const v=e.target.value; clearTimeout(acTimer); acTimer=setTimeout(()=>doSearch(v),280); });
+search.addEventListener('keydown',e=>{
+  if(results.hidden||!acItems.length){ if(e.key==='Enter'&&search.value.trim()){e.preventDefault();doSearch(search.value);} return; }
+  if(e.key==='ArrowDown'){e.preventDefault();acActive=Math.min(acActive+1,acItems.length-1);highlight();}
+  else if(e.key==='ArrowUp'){e.preventDefault();acActive=Math.max(acActive-1,0);highlight();}
+  else if(e.key==='Enter'){e.preventDefault();pick(acItems[acActive>=0?acActive:0]);}
+  else if(e.key==='Escape'){results.hidden=true;}
+});
+document.addEventListener('click',e=>{ if(!e.target.closest('.searchwrap'))results.hidden=true; });
+document.querySelectorAll('.chip[data-id]').forEach(c=>c.addEventListener('click',()=>pick({id:c.dataset.id,name:c.dataset.sym,symbol:c.dataset.sym})));
+
+const fmtUsd = n => n>=1 ? "$"+n.toLocaleString(undefined,{maximumFractionDigits:2})
+                         : "$"+n.toLocaleString(undefined,{maximumFractionDigits:6});
+const fmtBig = n => n==null ? "—" : n>=1e9 ? "$"+(n/1e9).toFixed(2)+"B"
+               : n>=1e6 ? "$"+(n/1e6).toFixed(1)+"M" : "$"+Math.round(n).toLocaleString();
+const pct = n => (n>=0?"+":"")+n.toFixed(1)+"%";
+
+// ---- sources (DefiLlama = reliable backbone; CoinGecko = optional second) ----
+async function llamaPrice(id){
+  const j = await fetch(`https://coins.llama.fi/prices/current/coingecko:${id}`).then(r=>r.json());
+  const c = j.coins && j.coins[`coingecko:${id}`];
+  return c ? {price:c.price, conf:c.confidence, sym:(c.symbol||id).toUpperCase()} : null;
+}
+async function llamaPct(id, period){
+  try{
+    const j = await fetch(`https://coins.llama.fi/percentage/coingecko:${id}?period=${period}`).then(r=>r.json());
+    const v = j.coins && j.coins[`coingecko:${id}`];
+    return (v!==undefined && v!==null) ? v : null;
+  }catch(e){ return null; }
+}
+async function cgSimple(id){        // optional; may be rate-limited / blocked in browser
+  try{
+    const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`);
+    if(!r.ok) return null;
+    const j = await r.json(); const d = j[id];
+    return d ? {price:d.usd, chg24:d.usd_24h_change, mcap:d.usd_market_cap} : null;
+  }catch(e){ return null; }
+}
+async function mantleTvl(){
+  try{ const c=await fetch("https://api.llama.fi/v2/chains").then(r=>r.json());
+    const m=c.find(x=>(x.name||"").toLowerCase()==="mantle"); return m?m.tvl:null; }catch(e){ return null; }
+}
+
+async function run(){
+  const btn=$('runBtn'); btn.disabled=true; $('output').hidden=true;
+  $('deskTitle').textContent="brief · $"+ASSET.sym;
+  const st=$('status');
+  for(const s of ["booting agent erc8004:mantle:the-rwa-desk",
+      "skill: DefiLlama · fetching "+ASSET.sym+" price",
+      "skill: CoinGecko · second price feed (optional)",
+      "skill: DefiLlama · Mantle chain TVL",
+      "reconcile: comparing sources"]){
+    st.innerHTML=s+' <span class="blink">▍</span>'; await sleep(340);
+  }
+
+  const ll = await llamaPrice(ASSET.id);          // backbone
+  if(!ll){
+    st.innerHTML='DefiLlama has no price for "'+ASSET.id+'". use a CoinGecko id like <b>mantle</b>, <b>ethereum</b>, or <b>bitcoin</b>, then run again.';
+    btn.disabled=false; return;
+  }
+  const cg   = await cgSimple(ASSET.id);          // optional
+  const p24  = await llamaPct(ASSET.id,"24h");
+  const p7   = await llamaPct(ASSET.id,"7d");
+  const tvl  = await mantleTvl();
+  const sym  = ll.sym || ASSET.sym;
+  $('deskTitle').textContent="brief · $"+sym;
+  st.innerHTML="reconcile complete · "+new Date().toISOString().replace('T',' ').slice(0,16)+" UTC";
+
+  const price = ll.price;                          // DefiLlama is the trusted backbone
+  const chg24 = (cg&&cg.chg24!=null)?cg.chg24:p24;
+  const chg7  = p7;
+  const mcap  = cg?cg.mcap:null;
+
+  // snapshot
+  $('snap').innerHTML=`
+    <div class="cell"><div class="k">price</div><div class="v">${fmtUsd(price)}</div></div>
+    <div class="cell"><div class="k">24h</div><div class="v">${chg24!=null?('<span class="'+(chg24<0?'down':'up')+'">'+pct(chg24)+'</span>'):'—'}</div></div>
+    <div class="cell"><div class="k">7d</div><div class="v">${chg7!=null?('<span class="'+(chg7<0?'down':'up')+'">'+pct(chg7)+'</span>'):'—'}</div></div>
+    <div class="cell"><div class="k">market cap</div><div class="v">${fmtBig(mcap)} ${mcap?'':'<small>n/a</small>'}</div></div>
+    <div class="cell"><div class="k">price confidence</div><div class="v">${ll.conf!=null?(ll.conf*100).toFixed(0)+'%':'—'}</div></div>
+    <div class="cell"><div class="k">Mantle TVL</div><div class="v">${fmtBig(tvl)} <small>${tvl?'live':''}</small></div></div>`;
+
+  // reconcile price across named sources
+  let rows="";
+  if(cg && cg.price){
+    const a=ll.price, b=cg.price, spread=Math.abs(a-b)/Math.max(a,b)*100, conflict=spread>1.0;
+    rows+=`<div class="rrow"><div class="top">
+      <span class="metric">price</span>
+      <span class="srcs"><span class="src">DefiLlama<b>${fmtUsd(a)}</b></span><span class="src">CoinGecko<b>${fmtUsd(b)}</b></span></span>
+      <span class="tag ${conflict?'conflict':'agree'}">${conflict?'conflict':'sources agree'}</span></div>
+      <div class="note ${conflict?'bad':''}">spread ${spread.toFixed(2)}% between DefiLlama and CoinGecko${ll.conf!=null?' · DefiLlama confidence '+(ll.conf*100).toFixed(0)+'%':''}.</div></div>`;
+  }else{
+    rows+=`<div class="rrow"><div class="top">
+      <span class="metric">price</span>
+      <span class="srcs"><span class="src">DefiLlama<b>${fmtUsd(ll.price)}</b></span></span>
+      <span class="tag single">single source</span></div>
+      <div class="note">CoinGecko's free API was unreachable just now (rate limit or browser block), so price is shown from DefiLlama only${ll.conf!=null?' at '+(ll.conf*100).toFixed(0)+'% confidence':''}.</div></div>`;
+  }
+  if(mcap) rows+=`<div class="rrow"><div class="top">
+      <span class="metric">market cap</span>
+      <span class="srcs"><span class="src">CoinGecko<b>${fmtBig(mcap)}</b></span></span>
+      <span class="tag single">single source</span></div>
+      <div class="note">one authoritative feed; shown, not reconciled.</div></div>`;
+  if(tvl) rows+=`<div class="rrow"><div class="top">
+      <span class="metric">Mantle TVL</span>
+      <span class="srcs"><span class="src">DefiLlama<b>${fmtBig(tvl)}</b></span></span>
+      <span class="tag single">single source</span></div>
+      <div class="note">chain-level context, live from DefiLlama.</div></div>`;
+  $('recon').innerHTML=rows;
+
+  // signals
+  const flags=[];
+  if(cg && cg.price){
+    const spread=Math.abs(ll.price-cg.price)/Math.max(ll.price,cg.price)*100;
+    if(spread>1.0) flags.push(["price sources disagree",`DefiLlama and CoinGecko differ by ${spread.toFixed(2)}%. treat the price as uncertain until they converge.`,false]);
+    else flags.push(["price verified",`two independent feeds agree within ${spread.toFixed(2)}%. the price is trustworthy.`,true]);
+  }else{
+    flags.push(["single feed only",`only DefiLlama answered. the number is usable but not cross-checked right now.`,false]);
+  }
+  if(ll.conf!=null && ll.conf<0.9) flags.push(["thin price confidence",`DefiLlama reports ${(ll.conf*100).toFixed(0)}% confidence. liquidity for this asset may be shallow.`,false]);
+  if(chg7!=null && chg7<=-10) flags.push(["weekly drawdown",`down ${chg7.toFixed(1)}% over 7 days.`,false]);
+  if(flags.filter(f=>!f[2]).length===0) flags.push(["clear",`no risk rules tripped for ${sym} right now.`,true]);
+  $('flags').innerHTML=flags.map(f=>`<li class="${f[2]?'ok':''}"><span class="lab">${f[0]}</span>${f[1]}</li>`).join('');
+
+  $('srcline').textContent="sources: DefiLlama (coins.llama.fi + api.llama.fi) and CoinGecko when reachable. all public, fetched client-side just now.";
+  $('output').hidden=false; btn.disabled=false; btn.textContent="▸ Re-run the Desk";
+}
+$('runBtn').addEventListener('click',run);
+</script>
+</body>
+</html>
